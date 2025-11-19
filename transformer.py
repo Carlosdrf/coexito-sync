@@ -23,15 +23,21 @@ STOCK_LOCATIONS_WEBHOOK_ID=os.getenv('STOCK_LOCATIONS_WEBHOOK_ID')
 # handler 
 def handler(event = None, context = None):
     # stocks = sendStockLocationData()
-    # sendProductsData()
+    sendProductsData()
     # sendClientsData(stocks)
-    sendPriceListData()
+    # sendPriceListData()
     # sendStockQuantityData()
 
 session = requests.Session()
 
 session.headers.update({
     "x-api-key": os.getenv('COEXITO_API_KEY')
+})
+
+webhook_session = requests.Session()
+
+webhook_session.headers.update({
+    "x-api-key": os.getenv('WEBHOOK_CLIENT_API')
 })
 
 # fields map config
@@ -65,10 +71,6 @@ item_fields = {
         {
             "sourceId": "category",
             "field": "categ_id",
-        },
-        {
-            'sourceId': 'productImageUrl',
-            'field': 'product_image_url',
         },
     ]
 }
@@ -290,7 +292,8 @@ def streamData(s: requests, endpoint, payload: dict[str, any]):
     try: 
         print('sending request...')
         print(f'{BASE_WEBHOOK_URL}/{endpoint}')
-        request = requests.post(f"{BASE_WEBHOOK_URL}/{endpoint}", json=payload)
+        
+        request = webhook_session.post(f"{BASE_WEBHOOK_URL}/{endpoint}", json=payload)
 
         request.raise_for_status()
         print(request.json())
@@ -312,13 +315,6 @@ def sendProductsData():
             item_fields.get('mapping'),
             item_fields.get('additional_fields')
         )
-
-        # for item in payload.get('data'):
-        #     item['product_image_url'] = None if item['product_image_url'] == '' else encode_url_to_base64(item['product_image_url'])
-        #     print('pesado?')
-        #     # break
-
-        # print(payload)
 
         streamData(session, PRODUCTS_WEBHOOK_ID, payload)
         
@@ -426,6 +422,7 @@ def sendPriceListData():
     # print(list(grouped.values()))
 
     streamData(session, PRICE_LISTS_WEBHOOK_ID, payload={
+        "entity": 'Price Lists',
         "brand": COMPANY,
         "data": list(grouped.values()),
     })
