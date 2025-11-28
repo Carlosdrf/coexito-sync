@@ -22,9 +22,9 @@ STOCK_LOCATIONS_WEBHOOK_ID=os.getenv('STOCK_LOCATIONS_WEBHOOK_ID')
 
 # handler 
 def handler(event = None, context = None):
-    # stocks = sendStockLocationData()
-    sendProductsData()
-    # sendClientsData(stocks)
+    stocks = sendStockLocationData()
+    # sendProductsData()
+    sendClientsData(stocks)
     # sendPriceListData()
     # sendStockQuantityData()
 
@@ -222,6 +222,11 @@ def listClients(page):
     endpoint = 'commerces'
     return session.get(f"{BASE_URL}/{endpoint}?page={page}")
 
+# credit limit
+def listCreditLimit(page):
+    endpoint = 'commerces/credit-limit'
+    return session.get(f"{BASE_URL}/{endpoint}?page={page}")
+
 # get price list response
 def getPriceLists(page):
     endpoint = 'price-lists'
@@ -323,7 +328,34 @@ def sendProductsData():
         if next_link > total_pages:
             break
 
+def getCreditLimit():
+    next_link = 1
+    data = []
+    while True:
+        credit_limit = listCreditLimit(next_link)
+        data = [
+            *data,
+            *credit_limit.json().get('content')
+        ]
+
+        next_link = credit_limit.json().get('number') + 1
+        total_pages = credit_limit.json().get('totalPages')
+
+        if next_link > total_pages:
+            break
+
+    return data
+
+def assignCreditLimit(credit_limit, commerce_id):
+    for credit in credit_limit:
+        if credit.get('commerceId') == commerce_id:
+            return credit.get('maxAmount') - credit.get('balance')
+
+    return 0
+
 def sendClientsData(stocks: list):
+    credit_limit = getCreditLimit()
+    print(len(credit_limit))
     next_link = 1
     payload = []
     while True:
@@ -350,7 +382,10 @@ def sendClientsData(stocks: list):
         for item in response.get('data'):
             key = item['name']
             if key not in grouped:
-                grouped[key] = item
+                grouped[key] = {
+                    **item,
+                    'credit': assignCreditLimit(credit_limit, item['commerce_id'])
+                }
             else:
                 grouped[key]['locations'].append(*item.get('locations'))
             grouped[key]['seller_id'] = item['seller_id'][0]
@@ -361,7 +396,6 @@ def sendClientsData(stocks: list):
                     grouped[key]['distribution_center_id'] = stock.get('name')
 
 
-        # print(list(grouped.values()))
         streamData(session, CLIENTS_WEBHOOK_ID, payload={
             'count': len(list(grouped.values())),
             "brand": COMPANY,
@@ -471,7 +505,7 @@ def processRequestData(
             *response.get('data'),
         ]
         
-        streamData(session, entity, response)
+        # streamData(session, entity, response)
         if next_link > total_pages:
             break
     return payload
